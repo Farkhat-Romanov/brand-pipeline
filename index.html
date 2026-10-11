@@ -1,0 +1,908 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light dark}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Brand Pipeline</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one sticky toolbar, below it either a horizontal kanban, a list, or a full-screen prompter. Card detail opens as a right-side sheet. */
+:root{
+  --bg:#f3f1ec; --panel:#ffffff; --line:#dcd7cc; --fg:#1d1b17; --muted:#6f6a5e;
+  --accent:#b4581e; --accent-ink:#ffffff; --soft:#efe6d9;
+  --ok:#2f7d4f; --warn:#b2821d; --crit:#b23a3a;
+  --font:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#16150f; --panel:#1f1d16; --line:#35321f; --fg:#efeadf; --muted:#9a927f;
+  --accent:#e2772e; --accent-ink:#1b120a; --soft:#2a2619;
+  --ok:#5fbf86; --warn:#d9a23c; --crit:#e06a6a; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#16150f; --panel:#1f1d16; --line:#35321f; --fg:#efeadf; --muted:#9a927f;
+  --accent:#e2772e; --accent-ink:#1b120a; --soft:#2a2619;
+  --ok:#5fbf86; --warn:#d9a23c; --crit:#e06a6a; color-scheme:dark }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--font);display:flex;flex-direction:column;min-height:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 12px;font-weight:600}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.ghost{background:transparent}
+button.small{padding:4px 9px;font-size:12px}
+button:disabled{opacity:.5;cursor:default}
+input,textarea,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+textarea{min-height:72px;resize:vertical;line-height:1.5}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+[hidden]{display:none!important}
+
+/* toolbar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bar h1{font-size:16px;margin:0 8px 0 0;font-weight:800;letter-spacing:-.01em}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button{border:none;background:transparent;padding:6px 10px;border-radius:8px;font-weight:600;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--soft);color:var(--fg)}
+.bar .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.status-dot.on{background:var(--ok)}
+
+/* notice */
+.notice{margin:12px 16px 0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.notice.crit{border-color:var(--crit)}
+
+main{flex:1;min-height:0;padding-block:12px;padding-inline:16px}
+
+/* kanban */
+.board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;min-height:60vh;align-items:flex-start}
+.col{flex:0 0 250px;background:var(--soft);border-radius:var(--r);padding:8px;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 140px)}
+.col header{display:flex;justify-content:space-between;align-items:center;padding:4px 6px;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+.col header .n{font-family:var(--mono);color:var(--muted);font-weight:600}
+.col .cards{overflow-y:auto;display:flex;flex-direction:column;gap:8px;min-height:40px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;cursor:pointer;display:flex;flex-direction:column;gap:6px}
+.card:hover{border-color:var(--accent)}
+.card .id{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.card .t{font-weight:700;line-height:1.3}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{font-size:11px;padding:2px 7px;border-radius:999px;background:var(--soft);color:var(--muted);font-weight:600}
+.chip.lang{background:var(--accent);color:var(--accent-ink)}
+.card.drag{opacity:.5}
+.col.over{outline:2px dashed var(--accent)}
+.col.inbox-col{flex-basis:270px}
+.inbox-item{background:var(--panel);border:1px dashed var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.inbox-item .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+.inbox-item .x{white-space:pre-wrap;max-height:90px;overflow:hidden;font-size:13px}
+
+/* sheet */
+.sheet{position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end;background:rgba(0,0,0,.35)}
+.sheet .pane{width:min(760px,100%);background:var(--panel);height:100%;overflow-y:auto;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.pane .head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pane .head h2{margin:0;font-size:18px;flex:1;min-width:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:600px){.grid2{grid-template-columns:1fr}}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+label.f>*{text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;color:var(--fg)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sep{height:1px;background:var(--line)}
+.ai{border:1px solid var(--line);border-radius:var(--r);padding:12px;background:var(--bg);display:flex;flex-direction:column;gap:8px}
+.ai .out{white-space:pre-wrap;font-size:13px;min-height:24px}
+.hooks-pick{display:flex;flex-direction:column;gap:6px}
+.hooks-pick button{text-align:left;font-weight:500;white-space:normal;line-height:1.4}
+
+/* lists */
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.toolrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolrow input,.toolrow select{width:auto;min-width:160px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:800px){.two{grid-template-columns:1fr}}
+h2.s{font-size:15px;margin:0;font-weight:800}
+
+/* prompter */
+.prompter{position:fixed;inset:0;z-index:30;background:var(--pbg,#000);color:var(--pfg,#fff);display:flex;flex-direction:column;--pguide:45%}
+.prompter .ctl{display:flex;gap:6px;align-items:center;padding:6px 10px;padding-top:calc(6px + env(safe-area-inset-top,0px));background:#141414;color:#eee;flex-wrap:wrap;font-size:12px;border-bottom:1px solid #2a2a2a}
+.prompter .ctl button{background:#242424;border-color:#3a3a3a;color:#fff;padding:5px 9px;font-size:12px}
+.prompter .ctl button.on{background:#e2772e;border-color:#e2772e;color:#1b120a}
+.prompter .ctl label{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.prompter .ctl input[type=range]{width:90px;padding:0;background:transparent;border:none}
+.prompter .ctl input[type=color]{width:28px;height:24px;padding:0;border:1px solid #3a3a3a;border-radius:6px;background:transparent}
+.prompter .ctl .sp{flex:1}
+.prompter .ctl .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;min-width:120px;text-align:right}
+.prompter .settings{display:none;gap:10px;flex-wrap:wrap;padding:6px 10px;background:#1a1a1a;border-bottom:1px solid #2a2a2a;font-size:12px;color:#ddd}
+.prompter.show-settings .settings{display:flex}
+.prompter .settings label{display:flex;align-items:center;gap:4px}
+.prompter .settings input[type=range]{width:90px;padding:0;background:transparent;border:none}
+.prompter .settings select{width:auto;background:#242424;color:#fff;border-color:#3a3a3a;padding:3px 6px;font-size:12px}
+.prompter .stage{flex:1;position:relative;min-height:0}
+.prompter .scroll{position:absolute;inset:0;overflow-y:auto;scroll-behavior:auto;cursor:pointer}
+.prompter .txt{max-width:var(--pwidth,900px);margin:0 auto;padding:calc(var(--pguide)) var(--pmargin,24px) 70vh;font-size:var(--psize,44px);line-height:var(--pline,1.35);letter-spacing:var(--pls,0);font-weight:var(--pweight,600);white-space:pre-wrap;text-align:var(--palign,center);font-family:var(--pfont,var(--font))}
+.prompter .scroll{transform:scale(var(--pmx,1),var(--pmy,1))}
+.prompter .guide{position:absolute;left:0;right:0;top:var(--pguide);height:0;border-top:2px solid rgba(226,119,46,.75);pointer-events:none}
+.prompter .guide::before,.prompter .guide::after{content:"";position:absolute;top:-7px;border:7px solid transparent}
+.prompter .guide::before{left:0;border-left-color:#e2772e}
+.prompter .guide::after{right:0;border-right-color:#e2772e}
+.prompter.no-guide .guide{display:none}
+.prompter .shade{position:absolute;left:0;right:0;pointer-events:none;background:linear-gradient(to bottom,var(--pbg,#000),transparent)}
+.prompter .shade.top{top:0;height:calc(var(--pguide) - 60px)}
+.prompter .shade.bot{bottom:0;height:25%;background:linear-gradient(to top,var(--pbg,#000),transparent)}
+.prompter.no-shade .shade{display:none}
+.prompter .count{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30vmin;font-weight:800;background:rgba(0,0,0,.7);color:#fff;font-family:var(--mono)}
+.prompter .prog{position:absolute;left:0;right:0;bottom:0;height:4px;background:#333}
+.prompter .prog i{display:block;height:100%;width:0;background:#e2772e}
+.prompter .tap{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-size:12px;color:#888;pointer-events:none}
+.prompter.ctl-hidden .ctl,.prompter.ctl-hidden .settings{display:none}
+@media (prefers-reduced-motion:reduce){.prompter .scroll{scroll-behavior:auto}}
+/* prompter tab (in page) */
+.pr-pick{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:800px){.pr-pick{grid-template-columns:1fr}}
+.pr-list{display:flex;flex-direction:column;gap:6px}
+.pr-list button{text-align:left;display:flex;gap:10px;align-items:center;font-weight:500}
+.pr-list button b{font-family:var(--mono);font-weight:600;color:var(--muted)}
+.kbd{font-family:var(--mono);font-size:12px;background:var(--soft);padding:1px 6px;border-radius:5px}
+.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-weight:600;z-index:50}
+</style>
+
+<div class="bar">
+  <h1>Brand Pipeline</h1>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-view="board">Доска</button>
+    <button role="tab" data-view="batch">Съёмка</button>
+    <button role="tab" data-view="prompt">Суфлёр</button>
+    <button role="tab" data-view="hooks">Хуки</button>
+    <button role="tab" data-view="tools">Анализ</button>
+  </div>
+  <div class="right">
+    <span class="muted" id="conn"><span class="status-dot" id="dot"></span> подключение…</span>
+    <button class="small" id="refresh">Обновить</button>
+    <button class="small primary" id="newVideo">+ Ролик</button>
+  </div>
+</div>
+
+<div class="notice" id="notice" hidden></div>
+
+<main>
+  <!-- BOARD -->
+  <section id="view-board">
+    <div class="board" id="board"></div>
+  </section>
+
+  <!-- BATCH -->
+  <section id="view-batch" hidden>
+    <div class="toolrow">
+      <select id="batchSel"></select>
+      <button class="small" id="newBatch">+ Партия</button>
+      <span class="muted" id="batchInfo"></span>
+    </div>
+    <div class="tablewrap"><table id="batchTable">
+      <thead><tr><th>#</th><th>ID</th><th>Название</th><th>Язык</th><th>~сек</th><th>Статус</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="muted" style="margin-top:10px">Снимаем только статус «Готов». Порядок — перетаскивание по колонке «#» или кнопки. Текст суфлёра открывается на весь экран: пробел — пауза, стрелки — скорость, Esc — выход.</p>
+  </section>
+
+  <!-- PROMPTER TAB -->
+  <section id="view-prompt" hidden>
+    <div class="pr-pick">
+      <div class="panel">
+        <h2 class="s">Из партии</h2>
+        <p class="muted" style="margin:0">Утверждённые ролики текущей партии. Открывается на весь экран, переключение по порядку.</p>
+        <div class="pr-list" id="prList"></div>
+      </div>
+      <div class="panel">
+        <h2 class="s">Свободный текст</h2>
+        <p class="muted" style="margin:0">Вставь любой текст — для теста, подкаста, созвона. Хронометраж считается от скорости.</p>
+        <textarea id="prFree" class="mono" style="min-height:160px" placeholder="Строка — 5–8 слов. Пустая строка — пауза."></textarea>
+        <div class="actions"><button class="primary" id="prFreeGo">Открыть суфлёр</button><button id="prFreeFormat">Разбить на строки</button><span class="muted" id="prFreeDur"></span></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <h2 class="s">Управление</h2>
+      <div class="muted" style="display:flex;gap:14px;flex-wrap:wrap">
+        <span><span class="kbd">Пробел</span> старт / пауза</span><span><span class="kbd">тап по тексту</span> старт / пауза</span>
+        <span><span class="kbd">↑ ↓</span> скорость</span><span><span class="kbd">+ −</span> размер</span><span><span class="kbd">← →</span> предыдущий / следующий ролик</span>
+        <span><span class="kbd">Home</span> в начало</span><span><span class="kbd">M</span> зеркало</span><span><span class="kbd">R</span> переворот</span>
+        <span><span class="kbd">H</span> скрыть панель</span><span><span class="kbd">S</span> настройки</span><span><span class="kbd">Esc</span> выход</span>
+      </div>
+      <p class="muted" style="margin:0">На iPad/телефоне: открой эту страницу, выбери ролик, положи устройство перед камерой. Включи зеркало, если текст идёт через стекло суфлёра. Все настройки запоминаются на этом устройстве.</p>
+    </div>
+  </section>
+
+  <!-- HOOKS -->
+  <section id="view-hooks" hidden>
+    <div class="toolrow">
+      <select id="hookCat"><option value="">Все категории</option></select>
+      <input id="hookQ" placeholder="поиск по хукам">
+      <button class="small" id="hookGen">Сгенерировать 5 под тему</button>
+    </div>
+    <div class="ai" id="hookGenBox" hidden>
+      <input id="hookTopic" placeholder="Тема ролика, одной строкой">
+      <div class="actions"><select id="hookLang" style="width:auto"><option value="kz">Казахский</option><option value="ru">Русский</option></select><button class="primary" id="hookGo">Предложить</button><span class="muted" id="hookStat"></span></div>
+      <div class="out" id="hookOut"></div>
+    </div>
+    <div class="tablewrap"><table id="hookTable">
+      <thead><tr><th>Категория</th><th>Формула</th><th>Пример RU</th><th>Пример KZ</th><th>Когда</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <h2 class="s" style="margin:18px 0 8px">Структуры ролика</h2>
+    <p class="muted" style="margin:0 0 10px">Claude выбирает одну из них при сборке пакета и держит тайминг. Секунды — ориентир для плана монтажа.</p>
+    <div class="tablewrap"><table id="fwTable">
+      <thead><tr><th>Структура</th><th>Формат · время · слова</th><th>Биты</th><th>Когда</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <!-- TOOLS -->
+  <section id="view-tools" hidden>
+    <div class="two">
+      <div class="panel">
+        <h2 class="s">Разбор референса</h2>
+        <p class="muted" style="margin:0">Вставь расшифровку или описание чужого ролика. Получишь: что работает в первые 3 секунды, структура, темп, приём — и три варианта твоего ролика на той же механике.</p>
+        <textarea id="refText" placeholder="Текст / расшифровка / описание референса"></textarea>
+        <div class="actions"><button class="primary" id="refGo">Разобрать</button><button class="ghost" id="refToVideo" disabled>Создать ролик из варианта 1</button><span class="muted" id="refStat"></span></div>
+        <div class="out" id="refOut" style="white-space:pre-wrap"></div>
+      </div>
+      <div class="panel">
+        <h2 class="s">Разбор моей истории</h2>
+        <p class="muted" style="margin:0">Расскажи историю как есть, голосом в тексте. Получишь 3 вопроса, которые делают её сильнее, и черновик структуры.</p>
+        <textarea id="storyText" placeholder="Что произошло, что решил, что вышло"></textarea>
+        <div class="actions"><button class="primary" id="storyGo">Разобрать</button><span class="muted" id="storyStat"></span></div>
+        <div class="out" id="storyOut" style="white-space:pre-wrap"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <h2 class="s">Авторский голос</h2>
+      <p class="muted" style="margin:0">Правила, которые Claude применяет ко всем сценариям. Одна строка — одно правило. Факты и цифры, которые нельзя выдумывать, тоже сюда.</p>
+      <div class="tablewrap"><table id="voiceTable"><thead><tr><th>Тип</th><th>Текст</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="actions"><select id="voiceKind" style="width:auto"><option value="rule">Правило</option><option value="fact">Факт</option><option value="avoid">Не говорить</option><option value="sample">Пример речи</option></select><input id="voiceText" placeholder="Новая строка"><button id="voiceAdd">Добавить</button></div>
+    </div>
+  </section>
+</main>
+
+<!-- CARD SHEET -->
+<div class="sheet" id="sheet" hidden>
+  <div class="pane" id="pane"></div>
+</div>
+
+<!-- PROMPTER -->
+<div class="prompter" id="prompter" hidden>
+  <div class="ctl">
+    <button id="pPrev" title="←">‹</button>
+    <span id="pTitle" class="mono"></span>
+    <button id="pNext" title="→">›</button>
+    <button id="pPlay" class="primary">▶ Старт</button>
+    <button id="pStop">■</button>
+    <label>Скорость <input type="range" id="pSpeed" min="10" max="160" value="40"><span id="pSpeedV" class="mono">40</span></label>
+    <label>Размер <input type="range" id="pSize" min="20" max="96" value="44"><span id="pSizeV" class="mono">44</span></label>
+    <button id="pMirror" title="M">Зеркало</button>
+    <button id="pFlip" title="R">Переворот</button>
+    <button id="pSettings" title="S">Настройки</button>
+    <span class="sp"></span>
+    <span class="tm"><span id="pElapsed">0:00</span> / <span id="pTotal">0:00</span></span>
+    <button id="pHide" title="H">Скрыть</button>
+    <button id="pClose" title="Esc">✕</button>
+  </div>
+  <div class="settings">
+    <label>Отсчёт <select id="pCount"><option value="0">нет</option><option value="3" selected>3</option><option value="5">5</option></select></label>
+    <label>Ширина <input type="range" id="pWidth" min="400" max="1600" value="900"></label>
+    <label>Поля <input type="range" id="pMargin" min="0" max="120" value="24"></label>
+    <label>Интервал <input type="range" id="pLine" min="110" max="200" value="135"></label>
+    <label>Разрядка <input type="range" id="pLs" min="0" max="8" value="0"></label>
+    <label>Линия <input type="range" id="pGuide" min="15" max="70" value="45"></label>
+    <label>Жирность <select id="pWeight"><option value="400">обычная</option><option value="600" selected>полужирная</option><option value="800">жирная</option></select></label>
+    <label>Выравнивание <select id="pAlign"><option value="center" selected>центр</option><option value="left">слева</option></select></label>
+    <label>Шрифт <select id="pFont"><option value="sans">без засечек</option><option value="mono">моно</option><option value="serif">с засечками</option></select></label>
+    <label>Текст <input type="color" id="pFg" value="#ffffff"></label>
+    <label>Фон <input type="color" id="pBg" value="#000000"></label>
+    <label><input type="checkbox" id="pGuideOn" checked> линия чтения</label>
+    <label><input type="checkbox" id="pShadeOn" checked> затемнение</label>
+    <button id="pReset">Сбросить</button>
+  </div>
+  <div class="stage">
+    <div class="scroll" id="pScroll"><div class="txt" id="pTxt"></div></div>
+    <div class="shade top"></div><div class="shade bot"></div>
+    <div class="guide"></div>
+    <div class="count" id="pCountdown" hidden></div>
+    <div class="tap muted" id="pTap">тап — старт / пауза</div>
+    <div class="prog"><i id="pProg"></i></div>
+  </div>
+</div>
+
+<script>
+// ===================== CONFIG =====================
+const PROJECT = "jxzswkwlfslcovmiiblv";
+const SERVER = "Supabase";
+const STATUSES = [
+  ["inbox","Вход"],["script","Сценарий"],["ready","Готов"],["shot","Снят"],
+  ["edit","Монтаж"],["done","Готово"],["published","Опубликовано"]
+];
+const SNAME = Object.fromEntries(STATUSES); SNAME.dropped = "Отменён";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const q = v => v == null ? "null" : "'" + String(v).replace(/'/g, "''") + "'";
+const qarr = a => "array[" + (a||[]).map(q).join(",") + "]::text[]";
+let mcp = null, sample = null, MODE = "rest"; // "mcp" внутри Claude, "rest" — на своём сайте
+let videos = [], inbox = [], batches = [], hooks = [], voice = [], frameworks = [];
+let curBatch = null;
+
+// ===================== DATA: два бэкенда, один интерфейс =====================
+const SB_URL = "https://jxzswkwlfslcovmiiblv.supabase.co";
+const ANON = "sb_publishable_jlMS-dwWZ4uc8izN0zSAIw__MTD_Dbe";
+let PKEY = "";
+try { const u = new URL(location.href).searchParams.get("k"); if (u) { localStorage.setItem("pipelineKey", u); history.replaceState(null, "", location.pathname); } PKEY = localStorage.getItem("pipelineKey") || ""; } catch {}
+
+function parseResult(res) {
+  let p = res?.payload ?? res;
+  if (p && typeof p === "object" && !Array.isArray(p) && "result" in p) p = p.result;
+  if (typeof p === "string") {
+    const m = p.match(/<untrusted-data-[^>]*>\s*([\s\S]*?)\s*<\/untrusted-data/);
+    const body = m ? m[1] : p;
+    try { return JSON.parse(body); } catch { return []; }
+  }
+  return Array.isArray(p) ? p : [];
+}
+async function sql(query) {
+  const res = await mcp.callTool(SERVER, "execute_sql", { project_id: PROJECT, query }, { cache: false });
+  return parseResult(res);
+}
+async function rest(path, method = "GET", body) {
+  if (!PKEY) throw { code: "no_key" };
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    method, headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "x-pipeline-key": PKEY, "Content-Type": "application/json", Prefer: "return=representation" },
+    body: body == null ? undefined : JSON.stringify(body),
+  });
+  const t = await r.text();
+  if (r.status === 401 || r.status === 403) throw { code: "no_key" };
+  if (!r.ok) throw { code: "tool_error", message: t };
+  return t ? JSON.parse(t) : [];
+}
+// --- операции ---
+const api = {
+  async load() {
+    if (MODE === "mcp") return Promise.all([
+      sql("select * from brand_videos where status<>'dropped' order by id"),
+      sql("select id,kind,text,url,transcript,created_at from brand_inbox where processed=false order by created_at"),
+      sql("select * from brand_batches order by created_at desc"),
+      sql("select * from brand_hooks where active order by category,id"),
+      sql("select * from brand_voice where active order by kind,id"),
+      sql("select * from brand_frameworks where active order by id"),
+    ]);
+    const r = await Promise.all([
+      rest("brand_videos?status=neq.dropped&order=id"),
+      rest("brand_inbox?processed=eq.false&select=id,kind,text,url,transcript,created_at&order=created_at"),
+      rest("brand_batches?order=created_at.desc"),
+      rest("brand_hooks?active=eq.true&order=category,id"),
+      rest("brand_voice?active=eq.true&order=kind,id"),
+      rest("brand_frameworks?active=eq.true&order=id"),
+    ]);
+    if (!r[0].length && !r[2].length) { /* RLS без ключа отдаёт пусто */ const chk = await fetch(`${SB_URL}/rest/v1/brand_batches?select=id&limit=1`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "x-pipeline-key": PKEY } }); if ((await chk.json()).length === 0) throw { code: "no_key" }; }
+    return r;
+  },
+  async updateVideo(id, patch) {
+    if (MODE === "mcp") {
+      const set = Object.entries(patch).map(([k, v]) => {
+        if (k === "tags") return `tags=${qarr(v)}`;
+        if (k === "hook_variants") return `hook_variants=${q(JSON.stringify(v))}::jsonb`;
+        if (k === "metrics") return `metrics=${q(JSON.stringify(v))}::jsonb`;
+        if (typeof v === "number") return `${k}=${v}`;
+        return `${k}=${q(v)}`;
+      }).join(",");
+      return sql(`update brand_videos set ${set} where id=${q(id)}`);
+    }
+    return rest(`brand_videos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);
+  },
+  async createVideo(row) {
+    if (MODE === "mcp") {
+      const cols = Object.keys(row); const vals = cols.map(k => q(row[k]));
+      const r = await sql(`insert into brand_videos(id,${cols.join(",")}) values (brand_next_id(),${vals.join(",")}) returning id`);
+      return r[0]?.id;
+    }
+    const id = await rest("rpc/brand_next_id", "POST", {});
+    const r = await rest("brand_videos", "POST", { id, ...row });
+    return r[0]?.id;
+  },
+  async inboxDone(inboxId, videoId) {
+    if (MODE === "mcp") return sql(`update brand_inbox set processed=true${videoId ? ", video_id=" + q(videoId) : ""} where id=${q(inboxId)}`);
+    return rest(`brand_inbox?id=eq.${inboxId}`, "PATCH", { processed: true, ...(videoId ? { video_id: videoId } : {}) });
+  },
+  async createBatch(id) {
+    if (MODE === "mcp") return sql(`insert into brand_batches(id,status) values (${q(id)},'planned')`);
+    return rest("brand_batches", "POST", { id, status: "planned" });
+  },
+  async reorder(ids) {
+    if (MODE === "mcp") { const cases = ids.map((x, n) => `when ${q(x)} then ${n + 1}`).join(" "); return sql(`update brand_videos set shoot_order = case id ${cases} end where id in (${ids.map(q).join(",")})`); }
+    for (let n = 0; n < ids.length; n++) await rest(`brand_videos?id=eq.${encodeURIComponent(ids[n])}`, "PATCH", { shoot_order: n + 1 });
+  },
+  async voiceAdd(kind, content) {
+    if (MODE === "mcp") return sql(`insert into brand_voice(kind,content) values (${q(kind)},${q(content)})`);
+    return rest("brand_voice", "POST", { kind, content });
+  },
+  async voiceOff(id) {
+    if (MODE === "mcp") return sql(`update brand_voice set active=false where id=${Number(id)}`);
+    return rest(`brand_voice?id=eq.${Number(id)}`, "PATCH", { active: false });
+  },
+};
+async function loadAll() {
+  setConn("загрузка…", false);
+  try {
+    const [v, i, b, h, vo, fw] = await api.load();
+    videos = v; inbox = i; batches = b; hooks = h; voice = vo; frameworks = fw;
+    if (!curBatch) curBatch = (batches.find(x => x.status !== "closed") || batches[0])?.id || null;
+    setConn("база подключена", true);
+    hideNotice(); renderAll();
+  } catch (e) { onErr(e); }
+}
+function onErr(e) {
+  const code = e?.code || "upstream_error";
+  const map = {
+    not_granted: "Страница не получила доступ к Supabase. Разреши коннектор для этой страницы.",
+    server_not_connected: "Коннектор Supabase не подключён в claude.ai → Settings → Connectors.",
+    needs_reauth: "Supabase требует переподключения: claude.ai → Settings → Connectors.",
+    not_in_manifest: "Доступ к Supabase для этой страницы отключён. Включи в меню Permissions.",
+    approval_required: "Нужно подтвердить вызов Supabase — нажми «Обновить» и разреши.",
+    tool_error: "База вернула ошибку: " + (e.message || "").slice(0, 200),
+    no_key: "Нужен ключ доступа. Открой сайт по ссылке с ключом (…?k=…) или введи его ниже.",
+  };
+  if (code === "no_key") showKeyBox();
+  showNotice(map[code] || ("Не удалось связаться с базой (" + code + "). Нажми «Обновить»."), true);
+  setConn("нет связи", false);
+}
+function setConn(t, on) { $("#conn").innerHTML = `<span class="status-dot ${on ? "on" : ""}"></span> ${esc(t)}`; }
+function showNotice(t, crit) { const n = $("#notice"); n.textContent = t; n.className = "notice" + (crit ? " crit" : ""); n.hidden = false; }
+function hideNotice() { $("#notice").hidden = true; }
+function toast(t) { const d = document.createElement("div"); d.className = "toast"; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 1800); }
+
+// ===================== RENDER =====================
+function renderAll() { renderBoard(); renderBatch(); renderHooks(); renderVoice(); renderPromptTab(); }
+
+function renderBoard() {
+  const b = $("#board"); b.innerHTML = "";
+  // inbox column: raw inbox items + videos in status inbox
+  for (const [st, name] of STATUSES) {
+    const col = document.createElement("div"); col.className = "col" + (st === "inbox" ? " inbox-col" : ""); col.dataset.status = st;
+    const list = videos.filter(v => v.status === st);
+    const extra = st === "inbox" ? inbox.length : 0;
+    col.innerHTML = `<header><span>${name}</span><span class="n">${list.length + extra}</span></header><div class="cards"></div>`;
+    const cards = col.querySelector(".cards");
+    if (st === "inbox") for (const it of inbox) {
+      const d = document.createElement("div"); d.className = "inbox-item";
+      const kinds = { text: "идея", voice: "голосовое", link: "референс", photo: "скрин", video: "видео", forward: "пересланное", web: "с сайта", document: "файл", audio: "аудио" };
+      d.innerHTML = `<div class="k">${kinds[it.kind] || it.kind} · ${new Date(it.created_at).toLocaleDateString("ru")}</div>
+        <div class="x">${esc(it.transcript || it.text || it.url || "(без текста — расшифровать при разборе)")}</div>
+        <div class="actions"><button class="small primary" data-make="${it.id}">Сделать ролик</button><button class="small ghost" data-drop="${it.id}">Убрать</button></div>`;
+      cards.append(d);
+    }
+    for (const v of list) cards.append(cardEl(v));
+    col.addEventListener("dragover", e => { e.preventDefault(); col.classList.add("over"); });
+    col.addEventListener("dragleave", () => col.classList.remove("over"));
+    col.addEventListener("drop", async e => { e.preventDefault(); col.classList.remove("over"); const id = e.dataTransfer.getData("text/plain"); if (id) await setStatus(id, st); });
+    b.append(col);
+  }
+  b.querySelectorAll("[data-make]").forEach(x => x.onclick = () => makeFromInbox(x.dataset.make));
+  b.querySelectorAll("[data-drop]").forEach(x => x.onclick = async () => { try { await api.inboxDone(x.dataset.drop); await loadAll(); } catch (e) { onErr(e); } });
+}
+function cardEl(v) {
+  const d = document.createElement("div"); d.className = "card"; d.draggable = true;
+  d.innerHTML = `<div class="id">${esc(v.id)}${v.batch_id ? " · " + esc(v.batch_id) : ""}</div><div class="t">${esc(v.title || "Без названия")}</div>
+    <div class="chips"><span class="chip lang">${esc(v.lang)}</span>${v.format ? `<span class="chip">${esc(v.format)}</span>` : ""}${(v.tags || []).map(t => `<span class="chip">#${esc(t)}</span>`).join("")}${v.duration_sec ? `<span class="chip mono">${v.duration_sec}с</span>` : ""}</div>`;
+  d.onclick = () => openCard(v.id);
+  d.addEventListener("dragstart", e => { e.dataTransfer.setData("text/plain", v.id); d.classList.add("drag"); });
+  d.addEventListener("dragend", () => d.classList.remove("drag"));
+  return d;
+}
+
+// ===================== CARD SHEET =====================
+function openCard(id) {
+  const v = videos.find(x => x.id === id); if (!v) return;
+  const p = $("#pane");
+  const opt = (arr, cur) => arr.map(([k, n]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${n}</option>`).join("");
+  p.innerHTML = `
+  <div class="head"><span class="mono muted">${esc(v.id)}</span><h2 contenteditable="true" id="f_title">${esc(v.title || "Без названия")}</h2><button class="ghost" id="closeSheet">✕</button></div>
+  <div class="grid2">
+    <label class="f">Статус<select id="f_status">${opt([...STATUSES, ["dropped", "Отменён"]], v.status)}</select></label>
+    <label class="f">Партия<select id="f_batch"><option value="">—</option>${batches.map(b => `<option value="${esc(b.id)}" ${b.id === v.batch_id ? "selected" : ""}>${esc(b.id)}</option>`).join("")}</select></label>
+    <label class="f">Язык<select id="f_lang">${opt([["kz","Казахский"],["ru","Русский"],["mix","Смешанный"],["visual","Без речи"]], v.lang)}</select></label>
+    <label class="f">Формат<select id="f_format">${opt([["", "—"],["case","Кейс"],["story","История"],["demo","Демо"],["ref","Адаптация референса"],["other","Другое"]], v.format || "")}</select></label>
+    <label class="f">Метки (через пробел)<input id="f_tags" value="${esc((v.tags || []).join(" "))}"></label>
+    <label class="f">~Секунд<input id="f_dur" type="number" value="${v.duration_sec ?? ""}"></label>
+  </div>
+  <label class="f">Источник<textarea id="f_source" style="min-height:48px">${esc(v.source_ref || "")}</textarea></label>
+  <div class="ai">
+    <div class="actions"><button class="primary" id="aiPackage">Claude: собрать пакет</button><button id="aiHooks">3 хука из библиотеки</button><button id="aiPrompter">Собрать текст суфлёра</button><button id="aiStop" hidden>Стоп</button><span class="muted" id="aiStat"></span></div>
+    <div class="out" id="aiOut"></div>
+    <div class="hooks-pick" id="hooksPick"></div>
+  </div>
+  <div class="grid2">
+    <label class="f">Аудитория<input id="f_aud" value="${esc(v.audience || "")}"></label>
+    <label class="f">Цель<input id="f_goal" value="${esc(v.goal || "")}"></label>
+  </div>
+  <label class="f">Главная мысль (одно предложение)<input id="f_idea" value="${esc(v.main_idea || "")}"></label>
+  <label class="f">Варианты начала (по строке)<textarea id="f_hooks" style="min-height:70px">${esc((v.hook_variants || []).join("\n"))}</textarea></label>
+  <label class="f">Выбранное начало<input id="f_hook" value="${esc(v.hook_chosen || "")}"></label>
+  <label class="f">Сценарий · v${v.script_version}<textarea id="f_script" style="min-height:180px">${esc(v.script || "")}</textarea></label>
+  <label class="f">Текст суфлёра — только то, что произносится<textarea id="f_prompter" class="mono" style="min-height:140px">${esc(v.prompter || "")}</textarea></label>
+  <div class="actions"><button id="openPrompter">Открыть суфлёр</button><span class="muted" id="prStat">строка 5–8 слов, пустая строка = пауза</span></div>
+  <div class="sep"></div>
+  <div class="grid2">
+    <label class="f">План монтажа<textarea id="f_edit">${esc(v.edit_plan || "")}</textarea></label>
+    <label class="f">Доп. кадры<textarea id="f_broll">${esc(v.broll || "")}</textarea></label>
+    <label class="f">AI-визуалы (промпты)<textarea id="f_ai">${esc(v.ai_prompts || "")}</textarea></label>
+    <label class="f">Текст обложки<textarea id="f_cover" style="min-height:48px">${esc(v.cover_text || "")}</textarea></label>
+  </div>
+  <label class="f">Описание публикации<textarea id="f_caption">${esc(v.caption || "")}</textarea></label>
+  <div class="grid2">
+    <label class="f">Ссылка на публикацию<input id="f_url" value="${esc(v.published_url || "")}"></label>
+    <label class="f">Выводы после публикации<input id="f_review" value="${esc(v.review || "")}"></label>
+  </div>
+  <div class="actions"><button class="primary" id="save">Сохранить</button><button id="saveBump">Сохранить как новую версию сценария</button><span class="muted">Статус «Сценарий» отправляет текст в Telegram с кнопками</span></div>`;
+  $("#sheet").hidden = false;
+  $("#closeSheet").onclick = closeSheet;
+  $("#save").onclick = () => saveCard(v.id, false);
+  $("#saveBump").onclick = () => saveCard(v.id, true);
+  $("#openPrompter").onclick = () => openPrompter([{ id: v.id, title: $("#f_title").textContent, prompter: $("#f_prompter").value }], 0);
+  const prStat = () => { const w = $("#f_prompter").value.trim().split(/\s+/).filter(Boolean).length; $("#prStat").textContent = w ? `${w} слов · ~${Math.round(w / 2.3)} сек при обычном темпе` : "строка 5–8 слов, пустая строка = пауза"; if (w && !$("#f_dur").value) $("#f_dur").value = Math.round(w / 2.3); };
+  $("#f_prompter").addEventListener("input", prStat); prStat();
+  $("#aiPackage").onclick = () => aiPackage(v);
+  $("#aiHooks").onclick = () => aiHooks(v);
+  $("#aiPrompter").onclick = () => aiPrompter();
+  if (!AI_OK) { $("#aiPackage").disabled = $("#aiHooks").disabled = $("#aiPrompter").disabled = true; $("#aiStat").textContent = "Claude недоступен в этом просмотре"; }
+}
+function closeSheet() { $("#sheet").hidden = true; }
+function readCard() {
+  return {
+    title: $("#f_title").textContent.trim(), status: $("#f_status").value, batch_id: $("#f_batch").value || null,
+    lang: $("#f_lang").value, format: $("#f_format").value || null,
+    tags: $("#f_tags").value.split(/[\s,]+/).map(t => t.replace(/^#/, "")).filter(Boolean),
+    duration_sec: $("#f_dur").value ? Number($("#f_dur").value) : null, source_ref: $("#f_source").value,
+    audience: $("#f_aud").value, goal: $("#f_goal").value, main_idea: $("#f_idea").value,
+    hook_variants: $("#f_hooks").value.split("\n").map(s => s.trim()).filter(Boolean), hook_chosen: $("#f_hook").value,
+    script: $("#f_script").value, prompter: $("#f_prompter").value, edit_plan: $("#f_edit").value, broll: $("#f_broll").value,
+    ai_prompts: $("#f_ai").value, cover_text: $("#f_cover").value, caption: $("#f_caption").value,
+    published_url: $("#f_url").value || null, review: $("#f_review").value,
+  };
+}
+async function saveCard(id, bump) {
+  const c = readCard(); const cur = videos.find(v => v.id === id) || {};
+  if (bump) c.script_version = (cur.script_version || 1) + 1;
+  if (c.published_url && c.status === "published" && !cur.published_at) c.published_at = new Date().toISOString();
+  try {
+    await api.updateVideo(id, c);
+    toast("Сохранено"); closeSheet(); await loadAll();
+  } catch (e) { onErr(e); }
+}
+async function setStatus(id, st) {
+  try { await api.updateVideo(id, { status: st }); toast(SNAME[st]); await loadAll(); } catch (e) { onErr(e); }
+}
+async function makeFromInbox(inboxId) {
+  const it = inbox.find(x => x.id === inboxId); if (!it) return;
+  const src = (it.transcript || it.text || it.url || "").slice(0, 2000);
+  try {
+    const id = await api.createVideo({ title: (it.text || it.url || it.kind).slice(0, 60), status: "inbox", source_type: it.kind, source_ref: src, batch_id: curBatch });
+    await api.inboxDone(inboxId, id);
+    await loadAll(); if (id) openCard(id);
+  } catch (e) { onErr(e); }
+}
+$("#newVideo").onclick = async () => {
+  try {
+    const id = await api.createVideo({ title: "Новый ролик", status: "inbox", source_type: "idea", batch_id: curBatch });
+    await loadAll(); if (id) openCard(id);
+  } catch (e) { onErr(e); }
+};
+
+// ===================== CLAUDE =====================
+function voiceBlock() {
+  const g = k => voice.filter(x => x.kind === k).map(x => "- " + x.content).join("\n");
+  return `АВТОРСКИЙ ГОЛОС (правила):\n${g("rule") || "- разговорная речь, короткие фразы, без канцелярита и мотивационных штампов"}\n\nФАКТЫ (только эти цифры и события, ничего не выдумывать):\n${g("fact") || "- не использовать цифры и события, которых нет в источнике"}\n\nНЕ ГОВОРИТЬ:\n${g("avoid") || "- «в современном мире», «давайте разберёмся», «итак»"}\n\nПРИМЕРЫ РЕЧИ АВТОРА:\n${g("sample") || "(пока нет)"}`;
+}
+const hooksBlock = () => "БИБЛИОТЕКА ХУКОВ (формулы):\n" + hooks.map(h => `- [${h.category}] ${h.formula}`).join("\n");
+const fwBlock = () => "СТРУКТУРЫ РОЛИКА (выбери одну, укажи её название в поле framework, держи тайминг):\n" + frameworks.map(f => `### ${f.name} · ${f.format} · ${f.duration} · ${f.words}\n${f.beats}\nКогда: ${f.when_to_use}`).join("\n\n");
+let aiCtl = null, AI_OK = false;
+async function aiCall(prompt, tier, signal, onText) {
+  if (MODE === "mcp") { const r = await sample(prompt, { signal, cache: false, modelTier: tier, onText: ({ text }) => onText(text) }); return r.text; }
+  const r = await fetch(`${SB_URL}/functions/v1/brand-ai`, { method: "POST", signal, headers: { "Content-Type": "application/json", "x-pipeline-key": PKEY }, body: JSON.stringify({ prompt, tier }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw { code: j.code || "upstream_error", message: j.error || r.statusText };
+  onText(j.text); return j.text;
+}
+async function runAI(prompt, outEl, statEl, opts = {}) {
+  aiCtl = new AbortController(); $("#aiStop") && ($("#aiStop").hidden = false);
+  statEl.textContent = "Думаю… (30–90 сек)"; outEl.textContent = "";
+  try {
+    return await aiCall(prompt, opts.tier || "default", aiCtl.signal, text => { outEl.textContent = text; statEl.textContent = ""; });
+  } catch (e) {
+    const m = { not_granted: "Claude не разрешён для этой страницы", rate_limited: "Лимит — попробуй позже", refused: "Claude отказался, измени запрос", cancelled: "", no_ai_key: "Нет API-ключа: добавь anthropic_key в настройки базы", AbortError: "" };
+    statEl.textContent = m[e.code || e.name] ?? ("Ошибка: " + (e.message || e.code)); if (e.text) outEl.textContent = e.text; return null;
+  } finally { $("#aiStop") && ($("#aiStop").hidden = true); }
+}
+$("#aiStop") && ($("#aiStop").onclick = () => aiCtl?.abort());
+document.addEventListener("click", e => { if (e.target.id === "aiStop") aiCtl?.abort(); });
+
+async function aiPackage(v) {
+  const c = readCard();
+  const lang = { kz: "казахском (естественная разговорная речь, не перевод)", ru: "русском", mix: "смешанном казахско-русском, как говорят в Алматы", visual: "русском (ролик без речи — только план кадров)" }[c.lang];
+  const prompt = `Ты — продюсер и сценарист личного бренда Фархата Романова: 24 года, Алматы, пять работающих бизнесов (AI Trend — онлайн-академия ИИ для подростков; Trend Lenta — ленты для выпускников по СНГ; BrandTrend — мерч; HyperSky/Starlink Kazakhstan; Trend English). Контент про бизнес, маркетинг и практическое применение ИИ. Аудитория: живые, развивающиеся люди Казахстана, которым ИИ приносит пользу в деле.
+
+${voiceBlock()}
+
+${fwBlock()}
+
+${hooksBlock()}
+
+ИСТОЧНИК ИДЕИ:
+${c.source_ref || "(нет)"}
+Название: ${c.title}
+Формат: ${c.format || "выбери сам"}; язык: ${lang}; хронометраж 45–75 секунд (2,5–3 слова в секунду).
+${c.main_idea ? "Главная мысль уже задана: " + c.main_idea : ""}
+
+Собери пакет ролика по одной из структур. Не придумывай события, цифры и достижения — если чего-то не хватает, напиши в поле questions до 3 точечных вопросов автору.
+Хуки: 3 варианта из РАЗНЫХ категорий библиотеки. Для каждого проставь NERV (новизна, эмоция, релевантность, недосказанность, 1–5 каждое) и выбери лучший; если лучший ниже 12 — придумай четвёртый.
+Сценарий — от первого лица, разговорный, предложения до 12 слов, первые 2 секунды — хук без вступления, в середине одна фраза готовит CTA, последняя строка замыкает на хук. Отметь в сценарии [ЭКРАН: …] и [ТЕКСТ НА ЭКРАНЕ: …] там, где нужна смена кадра — не реже раза в 15 секунд.
+Суфлёр — ТОЛЬКО произносимый текст без пометок: строки по 5–8 слов, пустая строка между мыслями, цифры словами.
+edit_plan — по секундам: что в кадре, вставки, текст на экране, где субтитры ru/kz. cover_text — одна строка до 6 слов. caption — 2–3 строки + слово для комментария.
+
+Ответь ТОЛЬКО JSON-объектом с полями:
+{"title":"", "framework":"", "audience":"", "goal":"", "main_idea":"", "hook_variants":["","",""], "hook_scores":[{"hook":"","N":0,"E":0,"R":0,"V":0}], "hook_chosen":"", "script":"", "prompter":"", "duration_sec":60, "edit_plan":"", "broll":"", "ai_prompts":"", "cover_text":"", "caption":"", "format":"case|story|demo|ref|other", "questions":["",""]}`;
+  const out = $("#aiOut"), st = $("#aiStat");
+  const text = await runAI(prompt, out, st);
+  if (!text) return;
+  let j = null;
+  try { const m = text.match(/\{[\s\S]*\}/); j = JSON.parse(m ? m[0] : text); } catch { st.textContent = "Ответ не распознан как JSON — скопируй руками"; return; }
+  const set = (id, val) => { const el = $(id); if (el && val != null && val !== "") el.value = val; };
+  if (j.title) $("#f_title").textContent = j.title;
+  set("#f_aud", j.audience); set("#f_goal", j.goal); set("#f_idea", j.main_idea);
+  set("#f_hooks", (j.hook_variants || []).join("\n")); set("#f_hook", j.hook_chosen);
+  set("#f_script", j.script); set("#f_prompter", j.prompter); set("#f_dur", j.duration_sec);
+  set("#f_edit", j.edit_plan); set("#f_broll", j.broll); set("#f_ai", j.ai_prompts); set("#f_cover", j.cover_text); set("#f_caption", j.caption);
+  if (j.format) $("#f_format").value = j.format;
+  if ($("#f_status").value === "inbox") $("#f_status").value = "script";
+  const nerv = (j.hook_scores || []).map(s => `${(s.N|0)+(s.E|0)+(s.R|0)+(s.V|0)}/20 — ${s.hook}`).join("\n");
+  const qs = (j.questions || []).filter(Boolean);
+  out.textContent = (j.framework ? "Структура: " + j.framework + "\n" : "") + (nerv ? "NERV хуков:\n" + nerv + "\n" : "") + (qs.length ? "\nВопросы автору:\n" + qs.map(x => "• " + x).join("\n") : "\nПакет собран. Проверь и сохрани — статус «Сценарий» отправит его в Telegram.");
+  if (j.framework) $("#f_edit").value = "Структура: " + j.framework + "\n" + ($("#f_edit").value || "");
+  st.textContent = "";
+}
+async function aiHooks(v) {
+  const c = readCard();
+  const prompt = `${hooksBlock()}\n\nТема ролика: ${c.title}. Мысль: ${c.main_idea || c.source_ref || "(см. название)"}. Язык: ${c.lang === "kz" ? "казахский, естественная речь" : "русский"}.
+Предложи 3 разных начала (по формулам из разных категорий), каждое — одно-два предложения, без вступлений, конкретно про Фархата и Казахстан. Ответь ТОЛЬКО JSON-массивом строк.`;
+  const out = $("#aiOut"), st = $("#aiStat");
+  const text = await runAI(prompt, out, st, { tier: "quick" });
+  if (!text) return;
+  try {
+    const arr = JSON.parse(text.match(/\[[\s\S]*\]/)[0]);
+    out.textContent = ""; const pick = $("#hooksPick"); pick.innerHTML = "";
+    for (const h of arr) { const b = document.createElement("button"); b.textContent = h; b.onclick = () => { $("#f_hook").value = h; const t = $("#f_hooks"); t.value = (t.value ? t.value + "\n" : "") + h; toast("Хук выбран"); }; pick.append(b); }
+  } catch { st.textContent = "Не разобрал ответ"; }
+}
+async function aiPrompter() {
+  const s = $("#f_script").value; if (!s.trim()) { $("#aiStat").textContent = "Сначала сценарий"; return; }
+  const text = await runAI(`Преобразуй сценарий в текст телесуфлёра. Оставь ТОЛЬКО то, что произносится вслух. Убери ремарки, таймкоды, пометки монтажа, скобки. Строка — 5–8 слов, одна мысль — один абзац, между абзацами пустая строка. Короткие числа словами. Ничего не добавляй и не переформулируй. Ответь только текстом.\n\n${s}`, $("#aiOut"), $("#aiStat"), { tier: "quick" });
+  if (text) { $("#f_prompter").value = text.trim(); $("#aiOut").textContent = "Текст суфлёра собран"; }
+}
+
+// ===================== BATCH =====================
+function renderBatch() {
+  const sel = $("#batchSel");
+  sel.innerHTML = batches.map(b => `<option value="${esc(b.id)}" ${b.id === curBatch ? "selected" : ""}>${esc(b.id)} · ${esc(b.status)}</option>`).join("");
+  sel.onchange = () => { curBatch = sel.value; renderBatch(); renderPromptTab(); };
+  const list = videos.filter(v => v.batch_id === curBatch && !["published", "dropped", "done"].includes(v.status)).sort((a, b) => (a.shoot_order ?? 999) - (b.shoot_order ?? 999) || a.id.localeCompare(b.id));
+  const ready = list.filter(v => v.status === "ready" || v.status === "shot");
+  $("#batchInfo").textContent = `${list.length} роликов · готовы к съёмке: ${list.filter(v => v.status === "ready").length}`;
+  const tb = $("#batchTable tbody"); tb.innerHTML = "";
+  list.forEach((v, i) => {
+    const tr = document.createElement("tr");
+    const okStatus = v.status === "ready" || v.status === "shot";
+    tr.innerHTML = `<td class="mono">${v.shoot_order ?? "—"} <button class="small ghost" data-up="${esc(v.id)}">↑</button><button class="small ghost" data-down="${esc(v.id)}">↓</button></td>
+      <td class="mono">${esc(v.id)}</td><td>${esc(v.title)}</td><td>${esc(v.lang)}</td><td class="mono">${v.duration_sec ?? ""}</td>
+      <td><span class="chip" style="${okStatus ? "color:var(--ok)" : "color:var(--warn)"}">${SNAME[v.status]}</span></td>
+      <td class="actions"><button class="small" data-p="${esc(v.id)}" ${v.prompter && okStatus ? "" : "disabled"}>Суфлёр</button>${v.status === "ready" ? `<button class="small" data-shot="${esc(v.id)}">Снят</button>` : ""}<button class="small ghost" data-open="${esc(v.id)}">Открыть</button></td>`;
+    tb.append(tr);
+  });
+  tb.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { const seq = ready.filter(v => v.prompter); openPrompter(seq, seq.findIndex(v => v.id === b.dataset.p)); });
+  tb.querySelectorAll("[data-shot]").forEach(b => b.onclick = () => setStatus(b.dataset.shot, "shot"));
+  tb.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openCard(b.dataset.open));
+  const move = async (id, dir) => {
+    const ids = list.map(v => v.id); const i = ids.indexOf(id); const j = i + dir; if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    try { await api.reorder(ids); await loadAll(); } catch (e) { onErr(e); }
+  };
+  tb.querySelectorAll("[data-up]").forEach(b => b.onclick = () => move(b.dataset.up, -1));
+  tb.querySelectorAll("[data-down]").forEach(b => b.onclick = () => move(b.dataset.down, 1));
+}
+$("#newBatch").onclick = async () => {
+  const d = new Date(); const pre = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-B`;
+  const n = batches.filter(b => b.id.startsWith(pre)).length + 1;
+  try { await api.createBatch(pre + n); curBatch = pre + n; await loadAll(); toast("Партия " + pre + n); } catch (e) { onErr(e); }
+};
+
+// ===================== PROMPTER =====================
+const P = $("#prompter"), PS = $("#pScroll"), PT = $("#pTxt");
+let pSeq = [], pIdx = 0, pRun = false, pRaf = 0, pLast = 0, pElapsed = 0, pMirror = false, pFlip = false;
+const PDEF = { speed: 40, size: 44, count: 3, width: 900, margin: 24, line: 135, ls: 0, guide: 45, weight: 600, align: "center", font: "sans", fg: "#ffffff", bg: "#000000", guideOn: true, shadeOn: true };
+let pCfg = { ...PDEF };
+try { pCfg = { ...PDEF, ...JSON.parse(localStorage.getItem("prompterCfg") || "{}") }; } catch {}
+const PF = { sans: "var(--font)", mono: "var(--mono)", serif: "Georgia,'Times New Roman',serif" };
+function applyCfg() {
+  const c = pCfg, st = P.style;
+  st.setProperty("--psize", c.size + "px"); st.setProperty("--pwidth", c.width + "px"); st.setProperty("--pmargin", c.margin + "px");
+  st.setProperty("--pline", c.line / 100); st.setProperty("--pls", c.ls / 20 + "em"); st.setProperty("--pguide", c.guide + "%");
+  st.setProperty("--pweight", c.weight); st.setProperty("--palign", c.align); st.setProperty("--pfont", PF[c.font] || PF.sans);
+  st.setProperty("--pfg", c.fg); st.setProperty("--pbg", c.bg);
+  st.setProperty("--pmx", pMirror ? -1 : 1); st.setProperty("--pmy", pFlip ? -1 : 1);
+  P.classList.toggle("no-guide", !c.guideOn); P.classList.toggle("no-shade", !c.shadeOn);
+  $("#pMirror").classList.toggle("on", pMirror); $("#pFlip").classList.toggle("on", pFlip);
+  $("#pSpeed").value = c.speed; $("#pSpeedV").textContent = c.speed; $("#pSize").value = c.size; $("#pSizeV").textContent = c.size;
+  $("#pCount").value = c.count; $("#pWidth").value = c.width; $("#pMargin").value = c.margin; $("#pLine").value = c.line; $("#pLs").value = c.ls; $("#pGuide").value = c.guide;
+  $("#pWeight").value = c.weight; $("#pAlign").value = c.align; $("#pFont").value = c.font; $("#pFg").value = c.fg; $("#pBg").value = c.bg; $("#pGuideOn").checked = c.guideOn; $("#pShadeOn").checked = c.shadeOn;
+  try { localStorage.setItem("prompterCfg", JSON.stringify(c)); } catch {}
+  updateTotal();
+}
+const bind = (id, key, num = true, ev = "input") => { $(id).addEventListener(ev, e => { pCfg[key] = e.target.type === "checkbox" ? e.target.checked : (num ? Number(e.target.value) : e.target.value); applyCfg(); }); };
+bind("#pSpeed", "speed"); bind("#pSize", "size"); bind("#pCount", "count", true, "change"); bind("#pWidth", "width"); bind("#pMargin", "margin"); bind("#pLine", "line"); bind("#pLs", "ls"); bind("#pGuide", "guide");
+bind("#pWeight", "weight", true, "change"); bind("#pAlign", "align", false, "change"); bind("#pFont", "font", false, "change"); bind("#pFg", "fg", false); bind("#pBg", "bg", false); bind("#pGuideOn", "guideOn", false, "change"); bind("#pShadeOn", "shadeOn", false, "change");
+$("#pReset").onclick = () => { pCfg = { ...PDEF }; applyCfg(); };
+
+const fmt = s => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+function travel() { return Math.max(1, PS.scrollHeight - PS.clientHeight); }
+function updateTotal() { if (P.hidden) return; $("#pTotal").textContent = fmt(travel() / pCfg.speed); }
+function openPrompter(seq, idx) {
+  pSeq = seq.filter(v => v && (v.prompter || "").trim()); pIdx = Math.max(0, Math.min(idx, pSeq.length - 1)); if (!pSeq.length) { toast("Нет текста суфлёра"); return; }
+  P.hidden = false; P.classList.remove("ctl-hidden"); applyCfg(); loadPrompterItem();
+  document.documentElement.requestFullscreen?.().catch(() => {});
+}
+function loadPrompterItem() {
+  const v = pSeq[pIdx]; PT.textContent = v.prompter; $("#pTitle").textContent = pSeq.length > 1 ? `${v.id} · ${pIdx + 1}/${pSeq.length}` : v.id;
+  stopP(true); $("#pPrev").disabled = pIdx === 0; $("#pNext").disabled = pIdx >= pSeq.length - 1; requestAnimationFrame(updateTotal);
+}
+function stopP(reset) { pRun = false; cancelAnimationFrame(pRaf); $("#pPlay").textContent = "▶ Старт"; if (reset) { PS.scrollTop = 0; pElapsed = 0; $("#pElapsed").textContent = "0:00"; $("#pProg").style.width = "0"; } }
+function startP() {
+  if (pRun) return;
+  const go = () => { pRun = true; $("#pPlay").textContent = "⏸ Пауза"; pLast = performance.now(); pRaf = requestAnimationFrame(step); };
+  const n = PS.scrollTop < 5 ? pCfg.count : 0;
+  if (n > 0) countdown(n, go); else go();
+}
+function step(t) {
+  if (!pRun) return; const dt = (t - pLast) / 1000; pLast = t; pElapsed += dt;
+  PS.scrollTop += pCfg.speed * dt; $("#pElapsed").textContent = fmt(pElapsed); $("#pProg").style.width = (PS.scrollTop / travel() * 100) + "%";
+  if (PS.scrollTop >= travel() - 1) { stopP(false); $("#pPlay").textContent = "✓ Конец"; return; }
+  pRaf = requestAnimationFrame(step);
+}
+function countdown(n, done) {
+  const el = $("#pCountdown"); el.hidden = false; el.textContent = n;
+  const tick = () => { n--; if (n <= 0) { el.hidden = true; done(); } else { el.textContent = n; setTimeout(tick, 1000); } };
+  setTimeout(tick, 1000);
+}
+$("#pPlay").onclick = () => pRun ? stopP(false) : startP();
+$("#pStop").onclick = () => stopP(true);
+$("#pMirror").onclick = () => { pMirror = !pMirror; applyCfg(); };
+$("#pFlip").onclick = () => { pFlip = !pFlip; applyCfg(); };
+$("#pSettings").onclick = () => P.classList.toggle("show-settings");
+$("#pHide").onclick = () => P.classList.add("ctl-hidden");
+$("#pNext").onclick = () => { if (pIdx < pSeq.length - 1) { pIdx++; loadPrompterItem(); } };
+$("#pPrev").onclick = () => { if (pIdx > 0) { pIdx--; loadPrompterItem(); } };
+$("#pClose").onclick = closePrompter;
+PS.addEventListener("click", () => { if (P.classList.contains("ctl-hidden")) { P.classList.remove("ctl-hidden"); return; } pRun ? stopP(false) : startP(); });
+PS.addEventListener("scroll", () => { if (!pRun) $("#pProg").style.width = (PS.scrollTop / travel() * 100) + "%"; });
+function closePrompter() { stopP(false); P.hidden = true; P.classList.remove("show-settings", "ctl-hidden"); document.exitFullscreen?.().catch(() => {}); }
+document.addEventListener("keydown", e => {
+  if (P.hidden) { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); return; }
+  if (e.target.matches("input,select,textarea")) return;
+  const k = e.key;
+  if (k === " ") { e.preventDefault(); pRun ? stopP(false) : startP(); }
+  else if (k === "Escape") closePrompter();
+  else if (k === "ArrowUp") { e.preventDefault(); pCfg.speed = Math.min(160, pCfg.speed + 5); applyCfg(); }
+  else if (k === "ArrowDown") { e.preventDefault(); pCfg.speed = Math.max(10, pCfg.speed - 5); applyCfg(); }
+  else if (k === "+" || k === "=") { pCfg.size = Math.min(96, pCfg.size + 2); applyCfg(); }
+  else if (k === "-") { pCfg.size = Math.max(20, pCfg.size - 2); applyCfg(); }
+  else if (k === "ArrowRight") $("#pNext").click();
+  else if (k === "ArrowLeft") $("#pPrev").click();
+  else if (k === "Home") stopP(true);
+  else if (k.toLowerCase() === "m" || k.toLowerCase() === "ь") $("#pMirror").click();
+  else if (k.toLowerCase() === "r" || k.toLowerCase() === "к") $("#pFlip").click();
+  else if (k.toLowerCase() === "h" || k.toLowerCase() === "р") P.classList.toggle("ctl-hidden");
+  else if (k.toLowerCase() === "s" || k.toLowerCase() === "ы") P.classList.toggle("show-settings");
+});
+window.addEventListener("resize", updateTotal);
+
+// prompter tab
+function renderPromptTab() {
+  const list = videos.filter(v => v.batch_id === curBatch && (v.status === "ready" || v.status === "shot") && v.prompter).sort((a, b) => (a.shoot_order ?? 999) - (b.shoot_order ?? 999) || a.id.localeCompare(b.id));
+  const el = $("#prList"); el.innerHTML = "";
+  if (!list.length) el.innerHTML = `<span class="muted">В партии ${esc(curBatch || "—")} пока нет утверждённых роликов с текстом суфлёра.</span>`;
+  list.forEach((v, i) => { const b = document.createElement("button"); b.innerHTML = `<b>${esc(v.id)}</b> ${esc(v.title)} <span class="chip">${esc(v.lang)}</span>`; b.onclick = () => openPrompter(list, i); el.append(b); });
+}
+$("#prFreeGo").onclick = () => openPrompter([{ id: "текст", prompter: $("#prFree").value }], 0);
+$("#prFreeFormat").onclick = () => {
+  const words = $("#prFree").value.replace(/\s+/g, " ").trim().split(" "); const lines = []; let cur = [];
+  for (const w of words) { cur.push(w); if (cur.length >= 7 || /[.!?…]$/.test(w)) { lines.push(cur.join(" ")); if (/[.!?…]$/.test(w)) lines.push(""); cur = []; } }
+  if (cur.length) lines.push(cur.join(" "));
+  $("#prFree").value = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+};
+$("#prFree").addEventListener("input", () => { const w = $("#prFree").value.trim().split(/\s+/).filter(Boolean).length; $("#prFreeDur").textContent = w ? `${w} слов · ~${fmt(w / 2.3)} при обычном темпе` : ""; });
+
+// ===================== HOOKS =====================
+function renderHooks() {
+  const cat = $("#hookCat"); const cats = [...new Set(hooks.map(h => h.category))];
+  cat.innerHTML = `<option value="">Все категории</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join("");
+  const draw = () => {
+    const f = cat.value, s = $("#hookQ").value.toLowerCase();
+    const tb = $("#hookTable tbody"); tb.innerHTML = "";
+    for (const h of hooks.filter(h => (!f || h.category === f) && (!s || JSON.stringify(h).toLowerCase().includes(s))))
+      tb.insertAdjacentHTML("beforeend", `<tr><td><span class="chip">${esc(h.category)}</span><br><b>${esc(h.name)}</b></td><td>${esc(h.formula)}</td><td>${esc(h.example_ru)}</td><td>${esc(h.example_kz)}</td><td class="muted">${esc(h.when_to_use)}</td></tr>`);
+  };
+  cat.onchange = draw; $("#hookQ").oninput = draw; draw();
+  const ft = $("#fwTable tbody"); ft.innerHTML = "";
+  for (const f of frameworks) ft.insertAdjacentHTML("beforeend", `<tr><td><b>${esc(f.name)}</b></td><td class="muted">${esc(f.format)} · ${esc(f.duration)}<br>${esc(f.words)}</td><td style="white-space:pre-wrap;min-width:320px">${esc(f.beats)}</td><td class="muted">${esc(f.when_to_use)}</td></tr>`);
+}
+$("#hookGen").onclick = () => { $("#hookGenBox").hidden = !$("#hookGenBox").hidden; };
+$("#hookGo").onclick = async () => {
+  if (!AI_OK) { $("#hookStat").textContent = "Claude недоступен"; return; }
+  const topic = $("#hookTopic").value.trim(); if (!topic) return;
+  const kz = $("#hookLang").value === "kz";
+  await runAI(`${hooksBlock()}\n\nТема: ${topic}. Автор: Фархат, 24, Алматы, предприниматель с несколькими бизнесами, контент про бизнес и ИИ для казахстанской аудитории.\nПредложи 5 хуков на ${kz ? "казахском (живая речь, как говорят в Алматы, не перевод с русского)" : "русском"}: разные категории, каждый — максимум 2 предложения, конкретика, без вступлений. Формат: нумерованный список, после каждого в скобках категория.`, $("#hookOut"), $("#hookStat"), { tier: "quick" });
+};
+
+// ===================== TOOLS =====================
+let lastRef = null;
+$("#refGo").onclick = async () => {
+  if (!AI_OK) { $("#refStat").textContent = "Claude недоступен"; return; }
+  const t = $("#refText").value.trim(); if (!t) return;
+  const text = await runAI(`Разбери чужой ролик как продюсер. Не копируй его текст и не переноси чужие истории.\n\n${hooksBlock()}\n\n${fwBlock()}\n\nРОЛИК:\n${t.slice(0, 6000)}\n\nОтветь по разделам:\n1. Первые 3 секунды — какая категория хука из библиотеки и что именно удерживает. NERV-оценка (N/E/R/V по 1–5).\n2. Структура — какая из моих структур ближе всего, по блокам с секундами.\n3. Темп и подача (слов в секунду, длина фраз, где смена кадра).\n4. Визуальный приём и текст на экране.\n5. Что из этого работает для казахстанской аудитории, что нет.\n6. Три варианта МОЕГО ролика на этой механике (Фархат, Алматы, пять бизнесов, ИИ в деле): для каждого — название, структура, главная мысль, первое предложение.\nКоротко, без воды.`, $("#refOut"), $("#refStat"));
+  lastRef = text; $("#refToVideo").disabled = !text;
+};
+$("#refToVideo").onclick = async () => {
+  try {
+    const id = await api.createVideo({ title: "Адаптация референса", status: "inbox", source_type: "link", source_ref: ("РЕФЕРЕНС:\n" + $("#refText").value.slice(0, 1500) + "\n\nРАЗБОР:\n" + lastRef).slice(0, 4000), format: "ref", batch_id: curBatch });
+    await loadAll(); switchView("board"); if (id) openCard(id);
+  } catch (e) { onErr(e); }
+};
+$("#storyGo").onclick = async () => {
+  if (!AI_OK) { $("#storyStat").textContent = "Claude недоступен"; return; }
+  const t = $("#storyText").value.trim(); if (!t) return;
+  await runAI(`История автора (Фархат, предприниматель, Алматы):\n${t.slice(0, 6000)}\n\nЗадача: сделать из неё сильный ролик на 60 секунд, не выдумывая ничего. Ответь:\n1. Что в истории цепляет (одна фраза).\n2. Три точечных вопроса автору, ответы на которые сделают историю конкретнее (цифры, момент, решение).\n3. Черновая структура: хук → контекст → поворот → вывод, по одной строке.\n4. Какой формат из библиотеки хуков подходит.\nКоротко.`, $("#storyOut"), $("#storyStat"));
+};
+function renderVoice() {
+  const tb = $("#voiceTable tbody"); tb.innerHTML = "";
+  const names = { rule: "Правило", fact: "Факт", avoid: "Не говорить", sample: "Пример речи" };
+  for (const v of voice) { const tr = document.createElement("tr"); tr.innerHTML = `<td><span class="chip">${names[v.kind] || v.kind}</span></td><td>${esc(v.content)}</td><td><button class="small ghost" data-vdel="${v.id}">✕</button></td>`; tb.append(tr); }
+  tb.querySelectorAll("[data-vdel]").forEach(b => b.onclick = async () => { try { await api.voiceOff(b.dataset.vdel); await loadAll(); } catch (e) { onErr(e); } });
+  if (!voice.length) tb.innerHTML = `<tr><td colspan="3" class="muted">Пока пусто. Добавь первые правила — они попадут в каждый запрос к Claude.</td></tr>`;
+}
+$("#voiceAdd").onclick = async () => {
+  const t = $("#voiceText").value.trim(); if (!t) return;
+  try { await api.voiceAdd($("#voiceKind").value, t); $("#voiceText").value = ""; await loadAll(); } catch (e) { onErr(e); }
+};
+
+// ===================== VIEWS / BOOT =====================
+function switchView(name) {
+  document.querySelectorAll("[role=tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.view === name));
+  for (const s of ["board", "batch", "prompt", "hooks", "tools"]) $("#view-" + s).hidden = s !== name;
+  try { localStorage.setItem("view", name); } catch {}
+}
+document.querySelectorAll("[role=tab]").forEach(b => b.onclick = () => switchView(b.dataset.view));
+$("#refresh").onclick = loadAll;
+$("#sheet").addEventListener("click", e => { if (e.target === $("#sheet")) closeSheet(); });
+try { const v = localStorage.getItem("view"); if (v) switchView(v); } catch {}
+
+function showKeyBox() {
+  const n = $("#notice"); n.hidden = false; n.className = "notice crit";
+  n.innerHTML = `<span>Ключ доступа:</span><input id="keyIn" type="password" placeholder="pipeline key" style="width:auto;min-width:220px"><button class="primary small" id="keyGo">Войти</button>`;
+  $("#keyGo").onclick = () => { PKEY = $("#keyIn").value.trim(); try { localStorage.setItem("pipelineKey", PKEY); } catch {} loadAll(); };
+  $("#keyIn").onkeydown = e => { if (e.key === "Enter") $("#keyGo").click(); };
+}
+(async () => {
+  renderAll();
+  const c = window.claude;
+  if (c?.use) {
+    [mcp, sample] = await Promise.all([c.use("mcp"), c.use("sample")]);
+    if (mcp) { MODE = "mcp"; AI_OK = !!sample; await loadAll(); return; }
+    showNotice("Коннектор Supabase недоступен для этой страницы. Проверь Permissions артефакта.", true); setConn("нет коннектора", false); return;
+  }
+  MODE = "rest"; AI_OK = true; // вне Claude: база напрямую, Claude через brand-ai
+  if (!PKEY) { setConn("нужен ключ", false); showKeyBox(); return; }
+  await loadAll();
+})();
+</script>
+
+</body></html>
