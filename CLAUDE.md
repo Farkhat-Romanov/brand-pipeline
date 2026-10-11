@@ -26,15 +26,14 @@ GitHub Pages index.html (этот репозиторий) ── PostgREST (anon
 | `brand_frameworks` | структуры ролика (AIDA-60, PAS-45, …): beats с таймингом, words, when_to_use |
 | `brand_voice` | авторский голос: kind rule/fact/avoid/sample, content — попадает в каждый промпт |
 | `brand_log` | история смен статусов (триггер) |
-| `brand_settings` | **без политик RLS** (читает только service role): pipeline_key, tg_token, tg_secret, tg_chat_id, anthropic_key, openai_key, ai_model, ai_model_quick, app_html (устар.) |
+| `brand_settings` | **без политик RLS** (читает только service role): pipeline_key, tg_token, tg_secret, tg_chat_id, anthropic_key, anthropic_workspace, openai_key, ai_model, ai_model_quick, openai_model, openai_model_quick, whisper_model |
 
 Статусы: `inbox → script → ready → shot → edit → done → published`, плюс `dropped`.
 
 ## Edge Functions (verify_jwt = false)
 
 - `brand-bot` — webhook Telegram. Команды: /start /queue /batch /p ID /shot ID /script ID. Кнопки Ок/Переписать/В мусор меняют статус. Маршруты: `POST /notify` (с `x-pipeline-key`: send_script / send_batch / message), `GET /setup?key=` (регистрирует webhook). Токен берёт из `brand_settings.tg_token`.
-- `brand-ai` — прокси к Anthropic Messages API (fallback OpenAI). `POST {prompt, tier: default|quick}` с `x-pipeline-key` → `{text, model}`. Ключи в `brand_settings`.
-- `brand-app` — не используется: Supabase отдаёт text/html как text/plain.
+- `brand-ai` — прокси к ИИ. `POST {prompt, tier: default|quick, provider?}` с `x-pipeline-key` → `{text, model, provider}`; порядок: Anthropic → OpenAI (если один падает, берёт другой). `POST /transcribe {file_url | tg_file_id, lang?}` → `{text}` (Whisper). Ключи в `brand_settings`. Ключ Anthropic типа `sk-ant-usr-` требует `anthropic_workspace` (ID воркспейса из console.anthropic.com → Workspaces).
 
 Деплой функций: через Supabase MCP `deploy_edge_function` или `supabase functions deploy <name> --project-ref jxzswkwlfslcovmiiblv`.
 
@@ -48,7 +47,8 @@ GitHub Pages index.html (этот репозиторий) ── PostgREST (anon
 
 ## Что не сделано / идеи
 
+- Anthropic-ключ сейчас не проходит без `anthropic_workspace` — пока все запросы идут в OpenAI (gpt-4o / gpt-4o-mini).
+
 - Триггер «status=script → отправка в Telegram» через pg_net (миграция отменялась при применении). Пока вручную: `/script ID` в боте.
-- Расшифровка голосовых из Telegram (Whisper через OpenAI key) — добавить маршрут в `brand-ai`.
 - Воронка подписки в ChatPlace для @farkhat_romanov (аккаунт ещё не подключён в ChatPlace/Virale).
 - Автоотправка `/batch` в день съёмки, сбор метрик публикаций.

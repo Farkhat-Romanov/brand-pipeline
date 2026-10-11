@@ -121,10 +121,22 @@ async function intake(msg: any) {
   if (!text && !file_id) return;
 
   const file_path = file_id ? await filePath(file_id) : null;
+  // голосовые/аудио/кружки → расшифровка через brand-ai (Whisper)
+  let transcript: string | null = null;
+  if (file_path && (kind === "voice" || kind === "audio" || (kind === "video" && msg.video_note))) {
+    try {
+      const r = await fetch(`${SB_URL}/functions/v1/brand-ai/transcribe`, {
+        method: "POST", headers: { "content-type": "application/json", "x-pipeline-key": (await setting("pipeline_key")) ?? "" },
+        body: JSON.stringify({ file_url: `https://api.telegram.org/file/bot${TG_TOKEN}/${file_path}` }),
+      });
+      const j = await r.json();
+      if (r.ok && j.text) transcript = j.text;
+    } catch (e) { console.error("transcribe", e); }
+  }
   try {
     await db("brand_inbox", {
       method: "POST",
-      body: JSON.stringify({ tg_chat_id: chat_id, tg_message_id: msg.message_id, tg_user: user, kind, text, url, file_id, file_unique_id, file_path }),
+      body: JSON.stringify({ tg_chat_id: chat_id, tg_message_id: msg.message_id, tg_user: user, kind, text, url, file_id, file_unique_id, file_path, transcript }),
     }, "return=minimal");
   } catch (e) {
     if (String(e).includes("23505")) return send(chat_id, "Это уже во входящих");
@@ -132,7 +144,7 @@ async function intake(msg: any) {
   }
   const n = (await db(`brand_inbox?processed=eq.false&select=id`))?.length ?? 0;
   const label: Record<string, string> = { text: "идея", voice: "голосовое", audio: "аудио", link: "референс", photo: "скрин", video: "видео", document: "файл", forward: "пересланное" };
-  await send(chat_id, `📥 Принято: ${label[kind] ?? kind}. Во входящих: ${n}`);
+  await send(chat_id, `📥 Принято: ${label[kind] ?? kind}. Во входящих: ${n}` + (transcript ? `\n\n📝 ${esc(transcript.slice(0, 1500))}` : ""));
 }
 
 // ---------- команды ----------
