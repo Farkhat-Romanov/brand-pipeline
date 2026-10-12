@@ -883,7 +883,17 @@ function switchView(name) {
 document.querySelectorAll("[role=tab]").forEach(b => b.onclick = () => switchView(b.dataset.view));
 $("#refresh").onclick = loadAll;
 $("#sheet").addEventListener("click", e => { if (e.target === $("#sheet")) closeSheet(); });
-try { const v = localStorage.getItem("view"); if (v) switchView(v); } catch {}
+// #prompt — сразу вкладка суфлёра; #p-2610-01 — сразу полный экран на этом ролике
+const HASH = (location.hash || "").replace(/^#/, "");
+if (HASH === "prompt" || HASH.startsWith("p-")) switchView("prompt");
+else try { const v = localStorage.getItem("view"); if (v) switchView(v); } catch {}
+function openFromHash() {
+  if (!HASH.startsWith("p-")) return;
+  const id = HASH.slice(2);
+  const list = videos.filter(v => (v.status === "ready" || v.status === "shot") && v.prompter).sort((a, b) => (a.shoot_order ?? 999) - (b.shoot_order ?? 999) || a.id.localeCompare(b.id));
+  const i = list.findIndex(v => v.id === id);
+  if (i >= 0) openPrompter(list, i); else if (list.length) openPrompter(list, 0);
+}
 
 function showKeyBox() {
   const n = $("#notice"); n.hidden = false; n.className = "notice crit";
@@ -896,12 +906,13 @@ function showKeyBox() {
   const c = window.claude;
   if (c?.use) {
     [mcp, sample] = await Promise.all([c.use("mcp"), c.use("sample")]);
-    if (mcp) { MODE = "mcp"; AI_OK = !!sample; await loadAll(); return; }
+    if (mcp) { MODE = "mcp"; AI_OK = !!sample; await loadAll(); openFromHash(); return; }
     showNotice("Коннектор Supabase недоступен для этой страницы. Проверь Permissions артефакта.", true); setConn("нет коннектора", false); return;
   }
   MODE = "rest"; AI_OK = true; // вне Claude: база напрямую, Claude через brand-ai
   if (!PKEY) { setConn("нужен ключ", false); showKeyBox(); return; }
   await loadAll();
+  openFromHash();
 })();
 </script>
 
