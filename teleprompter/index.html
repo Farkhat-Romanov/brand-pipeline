@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Суфлёр</title>
+<style>
+  :root{--bg:#f3f1ec;--panel:#fff;--line:#dcd7cc;--fg:#1d1b17;--muted:#6f6a5e;--accent:#b4581e;color-scheme:light}
+  @media (prefers-color-scheme:dark){:root{--bg:#16150f;--panel:#1f1d16;--line:#35321f;--fg:#efeadf;--muted:#9a927f;--accent:#e2772e;color-scheme:dark}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px 16px}
+  main{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  h1{margin:0;font-size:22px}
+  p{margin:0;color:var(--muted)}
+  textarea{width:100%;min-height:50vh;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:14px;font:16px/1.6 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{font:inherit;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:8px;padding:9px 14px}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .muted{color:var(--muted);font-size:13px}
+  kbd{font:12px ui-monospace,monospace;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Суфлёр</h1>
+  <p>Вставь текст. Строка — одна фраза, пустая строка — пауза. Несколько роликов подряд разделяй строкой <code>---</code>.</p>
+  <textarea id="txt" placeholder="Сәлем, достар.&#10;&#10;Көптен бері сторис салмадым..."></textarea>
+  <div class="row">
+    <button class="primary" id="go">Открыть суфлёр</button>
+    <button id="split">Разбить на строки</button>
+    <span class="muted" id="dur"></span>
+  </div>
+  <p class="muted"><kbd>Пробел</kbd> старт/пауза · тап по тексту · <kbd>↑↓</kbd> скорость · <kbd>+ −</kbd> размер · <kbd>← →</kbd> ролик · <kbd>M</kbd> зеркало · <kbd>R</kbd> переворот · <kbd>H</kbd> скрыть панель · <kbd>S</kbd> настройки · <kbd>Esc</kbd> выход</p>
+</main>
+<script src="teleprompter.js"></script>
+<script>
+  const t = document.getElementById("txt"), dur = document.getElementById("dur");
+  try { t.value = localStorage.getItem("tp:draft") || ""; } catch (e) {}
+  const upd = () => { const e = Teleprompter.estimate(t.value); dur.textContent = e.words ? `${e.words} слов · ~${e.seconds} сек` : ""; try { localStorage.setItem("tp:draft", t.value); } catch (e) {} };
+  t.addEventListener("input", upd); upd();
+  document.getElementById("split").onclick = () => { t.value = t.value.split(/\n-{3,}\n/).map(p => Teleprompter.splitLines(p)).join("\n\n---\n\n"); upd(); };
+  document.getElementById("go").onclick = () => {
+    const parts = t.value.split(/\n\s*-{3,}\s*\n/).map(s => s.trim()).filter(Boolean);
+    Teleprompter.open(parts.map((text, i) => ({ id: String(i + 1).padStart(2, "0"), text })), 0);
+  };
+</script>
+</body>
+</html>
